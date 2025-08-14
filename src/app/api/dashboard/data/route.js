@@ -51,6 +51,7 @@
 //   }
 // }
 
+// src/app/api/dashboard/data/route.js
 import { getServerSession } from "next-auth/next";
 import clientPromise from "@/lib/mongodb";
 import { authOptions } from "@/lib/auth";
@@ -104,9 +105,7 @@ export async function GET(request) {
 
     // Fetch user progress
     const userId = session.user?.id;
-    const userProgress = (await db
-      .collection("userProgress")
-      .findOne({ userId })) || { progress: {} };
+    const userProgress = (await db.collection("userProgress").findOne({ userId })) || { progress: {} };
 
     // Calculate user stats for filtered questions
     const completedQuestions = questions.filter(
