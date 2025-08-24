@@ -18,55 +18,19 @@ export default function Header({ error = false, isSaving = false }) {
     await signOut({ callbackUrl: "/login" });
   };
 
-  const navLinks = [
-    { href: "/dashboard", label: "Dashboard", ariaLabel: "Go to Dashboard" },
-    { href: "/learn", label: "Learn", ariaLabel: "Go to Learn" },
-    { href: "/practice", label: "Practice", ariaLabel: "Go to Practice" },
-  ];
-
   return (
-    <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-10">
+    <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-999">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        {/* Logo and Subtitle */}
-        <div className="flex-1 max-w-[200px]">
+        {/* Logo and Subtitle (Clickable to Dashboard) */}
+        <div
+          className="flex-1 max-w-[200px] cursor-pointer"
+          onClick={() => router.push("/dashboard")}
+        >
           <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
             DevSpirits
           </h1>
           <p className="text-xs text-gray-300">Crack Interviews with Precision</p>
         </div>
-
-        {/* Desktop Navigation */}
-        <div className="flex-1 flex justify-center">
-          <nav className="hidden md:flex space-x-6">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className={`${
-                  pathname === link.href
-                    ? "text-blue-400 font-bold"
-                    : "text-white hover:text-blue-400"
-                } transition-colors`}
-                aria-label={link.ariaLabel}
-              >
-                {link.label}
-              </a>
-            ))}
-          </nav>
-        </div>
-
-        {/* Mobile Menu Button */}
-        <button
-          className="md:hidden p-2 text-white"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-        >
-          {isMobileMenuOpen ? (
-            <XMarkIcon className="w-6 h-6" />
-          ) : (
-            <Bars3Icon className="w-6 h-6" />
-          )}
-        </button>
 
         {/* Status Indicators and User Menu */}
         <div className="flex items-center gap-4">
@@ -126,29 +90,6 @@ export default function Header({ error = false, isSaving = false }) {
           </Menu>
         </div>
       </div>
-
-      {/* Mobile Navigation */}
-      {isMobileMenuOpen && (
-        <nav className="md:hidden bg-gray-800/90 backdrop-blur-md border-t border-gray-700">
-          <div className="container mx-auto px-4 py-4 flex flex-col space-y-4 text-center">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className={`${
-                  pathname === link.href
-                    ? "text-blue-400 font-bold"
-                    : "text-white hover:text-blue-400"
-                } transition-colors`}
-                aria-label={link.ariaLabel}
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                {link.label}
-              </a>
-            ))}
-          </div>
-        </nav>
-      )}
     </header>
   );
 }

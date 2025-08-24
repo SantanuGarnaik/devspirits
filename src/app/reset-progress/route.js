@@ -7,14 +7,14 @@ export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return new Response(
         JSON.stringify({ message: "Unauthorized" }),
         { status: 401, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const userId = session.user.id;
+    const userId = session.user.email;
     const client = await clientPromise;
     const db = client.db("interviewprep");
 
@@ -28,8 +28,8 @@ export async function POST(req) {
           completedQuestions: 0,
           completionPercentage: 0,
           updatedAt: new Date(),
-          lastActivityDate: new Date().toISOString().split('T')[0]
-        }
+          lastActivityDate: new Date().toISOString().split("T")[0],
+        },
       },
       { upsert: true }
     );

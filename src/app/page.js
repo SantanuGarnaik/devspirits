@@ -52,6 +52,52 @@
 //   );
 // }
 
+// src/app/page.js
+
+// import { getServerSession } from "next-auth/next";
+// import { redirect } from "next/navigation";
+// import InterviewLearningDashboardClient from "./dashboard/page";
+// import { authOptions } from "@/lib/auth";
+// import clientPromise from "@/lib/mongodb";
+
+// console.log("Page component executing");
+
+// async function getInitialData(userId) {
+//   const client = await clientPromise;
+//   const db = client.db("test");
+
+//   const questions = await db.collection("questions").find({}).toArray();
+//   const userProgress = (await db
+//     .collection("userProgress")
+//     .findOne({ userId })) || { progress: {} };
+
+//   return {
+//     questions: questions.map((q) => ({ ...q, _id: q._id.toString() })),
+//     initialProgress: userProgress.progress || {},
+//   };
+// }
+
+// export default async function Page() {
+//   console.log("Page component rendering");
+//   const session = await getServerSession(authOptions);
+//   if (!session || !session.user?.id) {
+//     console.log("No session or user ID, redirecting to login");
+//     redirect("/login");
+//   }
+
+//   const { questions, initialProgress } = await getInitialData(session.user.id);
+// console.log("Initial data fetched:", { questions, initialProgress }, session);
+
+//   return (
+//     <InterviewLearningDashboardClient
+//       initialQuestions={questions || []}
+//       initialProgress={initialProgress || {}}
+//       session={session}
+//     />
+//   );
+// }
+
+
 import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
 import InterviewLearningDashboardClient from "./dashboard/page";
@@ -84,13 +130,14 @@ export default async function Page() {
   }
 
   const { questions, initialProgress } = await getInitialData(session.user.id);
-console.log("Initial data fetched:", { questions, initialProgress }, session);
+  console.log("Initial data fetched:", { questions, initialProgress }, session);
 
   return (
     <InterviewLearningDashboardClient
       initialQuestions={questions || []}
       initialProgress={initialProgress || {}}
       session={session}
+      isLoading={false} // Initial load complete
     />
   );
 }

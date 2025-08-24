@@ -1,788 +1,151 @@
-// // src/app/dashboard/page.js
-
-// "use client";
-
-// import React, {
-//   useState,
-//   useEffect,
-//   useMemo,
-//   useCallback,
-//   useRef,
-// } from "react";
-// import { useRouter } from "next/navigation";
-// import { motion, AnimatePresence } from "framer-motion";
-// import { PieChart } from "react-minimal-pie-chart";
-// import { useSession } from "next-auth/react";
-// import { Menu, Transition } from "@headlessui/react";
-// import { ChevronDownIcon } from "@heroicons/react/20/solid";
-// import Header from "@/components/Header";
-// import Footer from "@/components/Footer";
-
-// export default function DashboardPage() {
-//   const router = useRouter();
-//   const { data: session, status } = useSession();
-
-//   const [questions, setQuestions] = useState([]);
-//   const [progress, setProgress] = useState({});
-//   const [selectedCategory, setSelectedCategory] = useState("");
-//   const [selectedSection, setSelectedSection] = useState("");
-//   const [selectedDifficulty, setSelectedDifficulty] = useState("");
-//   const [searchTerm, setSearchTerm] = useState("");
-//   const [showFilters, setShowFilters] = useState(false);
-//   const [isLoading, setIsLoading] = useState(true);
-//   const [isQuestionsLoading, setIsQuestionsLoading] = useState(false);
-//   const [error, setError] = useState(null);
-//   const [userStats, setUserStats] = useState(null);
-//   const [categories, setCategories] = useState([]);
-//   const [page, setPage] = useState(1);
-//   const [totalPages, setTotalPages] = useState(1);
-//   const [hasMore, setHasMore] = useState(true);
-//   const [isSaving, setIsSaving] = useState(false); // Ensure isSaving is defined
-
-//   // Debounced progress saving
-//   const [progressSaveTimeout, setProgressSaveTimeout] = useState(null);
-//   const observer = useRef();
-
-//   // Redirect unauthenticated users
-//   useEffect(() => {
-//     if (status === "unauthenticated") {
-//       router.push("/login");
-//     }
-//   }, [status, router]);
-
-//   // Fetch initial data and subsequent pages
-//   const fetchData = useCallback(
-//     async (pageNum, reset = false) => {
-//       if (status !== "authenticated") return;
-
-//       setIsQuestionsLoading(true);
-//       setError(null);
-
-//       try {
-//         const params = new URLSearchParams();
-//         if (selectedCategory) params.set("category", selectedCategory);
-//         if (selectedSection) params.set("section", selectedSection);
-//         if (selectedDifficulty) params.set("difficulty", selectedDifficulty);
-//         if (searchTerm) params.set("search", searchTerm);
-//         params.set("page", pageNum);
-//         params.set("limit", "10");
-
-//         const res = await fetch(`/api/dashboard/data?${params.toString()}`, {
-//           headers: {
-//             Authorization: `Bearer ${session?.accessToken || ""}`,
-//           },
-//         });
-
-//         if (!res.ok) {
-//           throw new Error(
-//             `Failed to fetch dashboard data: ${res.status} ${res.statusText}`
-//           );
-//         }
-
-//         const {
-//           initialQuestions,
-//           initialProgress,
-//           userStats,
-//           categories: fetchedCategories,
-//           totalPages,
-//           currentPage,
-//         } = await res.json();
-
-//         // Remove duplicates and ensure _id is string
-//         const uniqueQuestions = initialQuestions.filter(
-//           (q, index, arr) =>
-//             arr.findIndex((item) => item._id === q._id) === index
-//         );
-
-//         setQuestions((prev) =>
-//           reset ? uniqueQuestions : [...prev, ...uniqueQuestions]
-//         );
-//         setProgress(initialProgress || {});
-//         setUserStats(userStats);
-//         setCategories(fetchedCategories);
-//         setTotalPages(totalPages);
-//         setHasMore(pageNum < totalPages);
-
-//         // Initialize filters on first load
-//         if (!selectedCategory && fetchedCategories.length > 0 && reset) {
-//           setSelectedCategory(fetchedCategories[0]);
-//           const categoryQuestions = uniqueQuestions.filter(
-//             (q) => q.category === fetchedCategories[0]
-//           );
-//           const firstSection =
-//             [
-//               ...new Set(
-//                 categoryQuestions.map((q) => q.section).filter(Boolean)
-//               ),
-//             ][0] || "";
-//           setSelectedSection(firstSection);
-//           setSelectedDifficulty("Easy");
-//         }
-
-//         console.log("Data loaded successfully:", {
-//           questionsCount: uniqueQuestions.length,
-//           progressKeys: Object.keys(initialProgress || {}).length,
-//           page: currentPage,
-//           totalPages,
-//         });
-//       } catch (error) {
-//         console.error("Error fetching data:", error);
-//         setError("Failed to load data. Please try again.");
-//       } finally {
-//         setIsLoading(false);
-//         setIsQuestionsLoading(false);
-//       }
-//     },
-//     [
-//       session,
-//       status,
-//       selectedCategory,
-//       selectedSection,
-//       selectedDifficulty,
-//       searchTerm,
-//     ]
-//   );
-
-//   // Initial data fetch
-//   useEffect(() => {
-//     fetchData(1, true);
-//   }, [fetchData]);
-
-//   // Infinite scroll observer
-//   const lastQuestionRef = useCallback(
-//     (node) => {
-//       if (isQuestionsLoading || !hasMore) return;
-//       if (observer.current) observer.current.disconnect();
-//       observer.current = new IntersectionObserver((entries) => {
-//         if (entries[0].isIntersecting) {
-//           setPage((prev) => prev + 1);
-//         }
-//       });
-//       if (node) observer.current.observe(node);
-//     },
-//     [isQuestionsLoading, hasMore]
-//   );
-
-//   // Fetch next page when page changes
-//   useEffect(() => {
-//     if (page > 1) {
-//       fetchData(page);
-//     }
-//   }, [page, fetchData]);
-
-//   // Reset questions and page when filters change
-//   useEffect(() => {
-//     setQuestions([]);
-//     setPage(1);
-//     fetchData(1, true);
-//   }, [
-//     selectedCategory,
-//     selectedSection,
-//     selectedDifficulty,
-//     searchTerm,
-//     fetchData,
-//   ]);
-
-//   // Debounced progress saving
-//   const saveProgressToServer = useCallback(
-//     async (progressData) => {
-//       if (!session?.user?.email || Object.keys(progressData).length === 0)
-//         return;
-
-//       if (progressSaveTimeout) {
-//         clearTimeout(progressSaveTimeout);
-//       }
-
-//       const timeoutId = setTimeout(async () => {
-//         setIsSaving(true);
-//         try {
-//           const response = await fetch("/api/save-progress", {
-//             method: "POST",
-//             headers: {
-//               "Content-Type": "application/json",
-//               Authorization: `Bearer ${session?.accessToken || ""}`,
-//             },
-//             body: JSON.stringify({ progress: progressData }),
-//           });
-
-//           const result = await response.json();
-//           if (!result.success) {
-//             throw new Error(result.message || "Failed to save progress");
-//           }
-
-//           if (result.stats) {
-//             setUserStats((prev) => ({
-//               ...prev,
-//               ...result.stats,
-//             }));
-//           }
-
-//           console.log("Progress saved successfully");
-//         } catch (error) {
-//           console.error("Error saving progress:", error);
-//           setError("Failed to save progress");
-//         } finally {
-//           setIsSaving(false);
-//         }
-//       }, 1000);
-
-//       setProgressSaveTimeout(timeoutId);
-//       return () => {
-//         if (timeoutId) clearTimeout(timeoutId);
-//       };
-//     },
-//     [session, progressSaveTimeout]
-//   );
-
-//   // Save progress when it changes
-//   useEffect(() => {
-//     saveProgressToServer(progress);
-//   }, [progress, saveProgressToServer]);
-
-//   const handleLogout = async () => {
-//     try {
-//       const response = await fetch("/api/logout", {
-//         method: "POST",
-//         credentials: "include",
-//       });
-//       if (response.ok) {
-//         router.push("/login");
-//       } else {
-//         console.error("Logout failed");
-//       }
-//     } catch (error) {
-//       console.error("Logout error:", error);
-//     }
-//   };
-
-//   const safeQuestions = Array.isArray(questions) ? questions : [];
-//   const safeProgress = progress || {};
-
-//   // Memoized calculations for better performance
-//   const sections = useMemo(
-//     () => [
-//       ...new Set(
-//         safeQuestions
-//           .filter((q) => !selectedCategory || q.category === selectedCategory)
-//           .map((q) => q.section)
-//           .filter(Boolean)
-//       ),
-//     ],
-//     [safeQuestions, selectedCategory]
-//   );
-
-//   const difficulties = useMemo(() => ["Easy", "Medium", "Hard"], []);
-
-//   const completedCount = useMemo(
-//     () => safeQuestions.filter((q) => safeProgress[q._id]?.isCompleted).length,
-//     [safeQuestions, safeProgress]
-//   );
-
-//   const totalCount = userStats?.totalQuestions || safeQuestions.length;
-//   const progressPercentage = userStats?.completionPercentage || 0;
-
-//   const categoryProgress = useMemo(() => {
-//     return categories.map((category) => {
-//       const categoryQuestions = safeQuestions.filter(
-//         (q) => q.category === category
-//       );
-//       const completed = categoryQuestions.filter(
-//         (q) => safeProgress[q._id]?.isCompleted
-//       ).length;
-//       const total = categoryQuestions.length;
-//       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-//       return { category, completed, total, percentage };
-//     });
-//   }, [safeQuestions, safeProgress, categories]);
-
-//   const resetProgress = async () => {
-//     if (
-//       !confirm(
-//         "Are you sure you want to reset all progress? This cannot be undone."
-//       )
-//     ) {
-//       return;
-//     }
-
-//     try {
-//       const response = await fetch("/api/reset-progress", {
-//         method: "POST",
-//         headers: {
-//           Authorization: `Bearer ${session?.accessToken || ""}`,
-//         },
-//       });
-
-//       const result = await response.json();
-//       if (result.success) {
-//         setProgress({});
-//         setUserStats({
-//           totalQuestions: 0,
-//           completedQuestions: 0,
-//           completionPercentage: 0,
-//         });
-//         console.log("Progress reset successfully");
-//       } else {
-//         throw new Error(result.message || "Failed to reset progress");
-//       }
-//     } catch (error) {
-//       console.error("Error resetting progress:", error);
-//       setError("Failed to reset progress");
-//     }
-//   };
-
-//   const resetFilters = () => {
-//     setSelectedCategory("");
-//     setSelectedSection("");
-//     setSelectedDifficulty("");
-//     setSearchTerm("");
-//     setQuestions([]);
-//     setPage(1);
-//   };
-
-//   const getDifficultyConfig = (difficulty) => {
-//     const configs = {
-//       Easy: { color: "text-emerald-600 bg-emerald-100", icon: "🟢" },
-//       Medium: { color: "text-amber-600 bg-amber-100", icon: "🟡" },
-//       Hard: { color: "text-rose-600 bg-rose-100", icon: "🔴" },
-//     };
-//     return (
-//       configs[difficulty] || { color: "text-gray-600 bg-gray-100", icon: "⚪" }
-//     );
-//   };
-
-//   const getCategoryConfig = (category) => {
-//     const configs = {
-//       "Basic JavaScript": {
-//         gradient: "from-blue-600 to-cyan-600",
-//         bg: "bg-gradient-to-r from-blue-600 to-cyan-600",
-//       },
-//       "Advanced JavaScript": {
-//         gradient: "from-purple-600 to-pink-600",
-//         bg: "bg-gradient-to-r from-purple-600 to-pink-600",
-//       },
-//       "React JS": {
-//         gradient: "from-emerald-600 to-teal-600",
-//         bg: "bg-gradient-to-r from-emerald-600 to-teal-600",
-//       },
-//     };
-//     return (
-//       configs[category] || {
-//         gradient: "from-gray-600 to-gray-700",
-//         bg: "bg-gradient-to-r from-gray-600 to-gray-700",
-//       }
-//     );
-//   };
-
-//   // Loading state for initial load
-//   if (status === "loading" || isLoading) {
-//     return (
-//       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-//         <div className="text-white text-center">
-//           <div className="animate-spin w-12 h-12 border-4 border-blue-400 border-t-transparent rounded-full mx-auto mb-4"></div>
-//           <div className="text-xl">Loading your dashboard...</div>
-//         </div>
-//       </div>
-//     );
-//   }
-
-//   const userName = session?.user?.name || "User";
-//   const userImage = session?.user?.image || "https://placehold.co/40x40";
-
-//   return (
-//     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 text-white flex flex-col">
-//       {/* Header */}
-//       <Header />
-//       {/* Error banner */}
-//       {error && (
-//         <div className="bg-red-500/20 border border-red-500/50 px-4 py-3 mx-4 mt-4 rounded-lg">
-//           <div className="flex items-center justify-between">
-//             <div className="flex items-center gap-2">
-//               <span className="text-red-400">⚠️</span>
-//               <span className="text-red-100">{error}</span>
-//             </div>
-//             <button
-//               onClick={() => setError(null)}
-//               className="text-red-200 hover:text-white"
-//             >
-//               ✕
-//             </button>
-//           </div>
-//         </div>
-//       )}
-//       <div className="container mx-auto px-4 my-8 flex-1">
-//         {/* Overall Progress */}
-
-//         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/20">
-//           {Object.keys(safeProgress).length > 0 ? (
-//             <div>
-//               <div className="flex items-center justify-between mb-4">
-//                 <h2 className="text-2xl font-semibold">Overall Progress</h2>
-//                 <button
-//                   onClick={resetProgress}
-//                   className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-//                 >
-//                   Reset Progress
-//                 </button>
-//               </div>
-
-//               <div className="w-full bg-gray-700 rounded-full h-4 mb-4">
-//                 <div
-//                   className="bg-gradient-to-r from-green-400 to-blue-500 h-4 rounded-full transition-all duration-500"
-//                   style={{ width: `${progressPercentage}%` }}
-//                 />
-//               </div>
-
-//               <div className="text-center">
-//                 <span className="text-3xl font-bold">{completedCount}</span>
-//                 <span className="text-gray-300">
-//                   {" "}
-//                   / {totalCount} questions completed
-//                 </span>
-//                 <span className="ml-4 text-2xl font-semibold text-green-400">
-//                   ({progressPercentage}%)
-//                 </span>
-//               </div>
-
-//               {userStats?.lastUpdated && (
-//                 <div className="text-center mt-2 text-sm text-gray-400">
-//                   Last updated:{" "}
-//                   {new Date(userStats.lastUpdated).toLocaleString()}
-//                 </div>
-//               )}
-//             </div>
-//           ) : (
-//             <>
-//               <div className="flex items-center justify-between mb-4">
-//                 <h2 className="text-2xl font-semibold">Overall Progress</h2>
-//                 <button
-//                   onClick={resetProgress}
-//                   className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-//                 >
-//                   Reset Progress
-//                 </button>
-//               </div>
-
-//               <div className="w-full bg-gray-700 rounded-full h-4 mb-4">
-//                 <div
-//                   className="bg-gradient-to-r from-green-400 to-blue-500 h-4 rounded-full transition-all duration-500"
-//                   style={{ width: `0%` }}
-//                 />
-//               </div>
-
-//               <div className="text-center">
-//                 <span className="text-3xl font-bold">0</span>
-//                 <span className="text-gray-300">
-//                   {" "}
-//                   / {totalCount} questions completed
-//                 </span>
-//                 <span className="ml-4 text-2xl font-semibold text-green-400">
-//                   (0%)
-//                 </span>
-//               </div>
-//             </>
-//           )}
-//         </div>
-
-//         {/* Category Progress */}
-//         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/20">
-//           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-//             {categoryProgress.map(
-//               ({ category, completed, total, percentage }) => {
-//                 const { bg } = getCategoryConfig(category);
-//                 return (
-//                   <div key={category} className="flex flex-col items-center">
-//                     <h3
-//                       className={`text-lg font-semibold mb-2 ${bg} px-3 py-1 rounded-full text-white`}
-//                     >
-//                       {category}
-//                     </h3>
-//                     <div className="w-32 h-32">
-//                       <PieChart
-//                         data={[
-//                           {
-//                             title: "Completed",
-//                             value: completed,
-//                             color: "#34D399",
-//                           },
-//                           {
-//                             title: "Remaining",
-//                             value: total - completed,
-//                             color: "#4B5563",
-//                           },
-//                         ]}
-//                         lineWidth={20}
-//                         label={() => `${percentage}%`}
-//                         labelStyle={{
-//                           fontSize: "16px",
-//                           fill: "#ffffff",
-//                           fontWeight: "bold",
-//                         }}
-//                         labelPosition={0}
-//                       />
-//                     </div>
-//                     <p className="mt-2 text-gray-300">
-//                       {completed} / {total} questions ({percentage}%)
-//                     </p>
-//                   </div>
-//                 );
-//               }
-//             )}
-//           </div>
-//         </div>
-
-//         {/* Filters */}
-//         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/20">
-//           <div className="flex items-center justify-between mb-4">
-//             <h3 className="text-xl font-semibold">Filters</h3>
-//             <div className="flex gap-3">
-//               <button
-//                 onClick={resetFilters}
-//                 className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
-//               >
-//                 Reset Filters
-//               </button>
-//               <button
-//                 onClick={() => setShowFilters(!showFilters)}
-//                 className="lg:hidden px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
-//               >
-//                 {showFilters ? "Hide" : "Show"} Filters
-//               </button>
-//             </div>
-//           </div>
-
-//           <div
-//             className={`${showFilters ? "block" : "hidden"} lg:block space-y-4`}
-//           >
-//             <div>
-//               <input
-//                 type="text"
-//                 placeholder="Search questions..."
-//                 value={searchTerm}
-//                 onChange={(e) => setSearchTerm(e.target.value)}
-//                 className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-//               />
-//             </div>
-
-//             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-//               <select
-//                 value={selectedCategory}
-//                 onChange={(e) => setSelectedCategory(e.target.value)}
-//                 className="px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-//               >
-//                 <option value="">All Categories</option>
-//                 {categories.map((cat) => (
-//                   <option key={cat} value={cat}>
-//                     {cat}
-//                   </option>
-//                 ))}
-//               </select>
-
-//               <select
-//                 value={selectedSection}
-//                 onChange={(e) => setSelectedSection(e.target.value)}
-//                 className="px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-//               >
-//                 <option value="">All Sections</option>
-//                 {sections.map((sec) => (
-//                   <option key={sec} value={sec}>
-//                     {sec}
-//                   </option>
-//                 ))}
-//               </select>
-
-//               <select
-//                 value={selectedDifficulty}
-//                 onChange={(e) => setSelectedDifficulty(e.target.value)}
-//                 className="px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-//               >
-//                 <option value="">All Difficulties</option>
-//                 {difficulties.map((diff) => (
-//                   <option key={diff} value={diff}>
-//                     {diff}
-//                   </option>
-//                 ))}
-//               </select>
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Questions */}
-//         <div className="space-y-6 relative">
-//           <h3 className="text-2xl font-semibold mb-4">
-//             Questions ({userStats?.totalQuestions || 0})
-//           </h3>
-
-//           {isQuestionsLoading && (
-//             <div className="text-center py-4">
-//               <div className="animate-spin w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full mx-auto"></div>
-//               <p className="text-gray-300 mt-2">Loading questions...</p>
-//             </div>
-//           )}
-
-//           <AnimatePresence>
-//             {questions.length > 0
-//               ? questions.map((question, index) => {
-//                   const isLast = index === questions.length - 1;
-//                   const diffConfig = getDifficultyConfig(question.difficulty);
-//                   const categoryConfig = getCategoryConfig(question.category);
-//                   const isCompleted = safeProgress[question._id]?.isCompleted;
-//                   const showAnswer = safeProgress[question._id]?.showAnswer;
-
-//                   return (
-//                     <motion.div
-//                       key={question._id}
-//                       ref={isLast ? lastQuestionRef : null}
-//                       initial={{ opacity: 0, y: 20 }}
-//                       animate={{ opacity: 1, y: 0 }}
-//                       exit={{ opacity: 0, y: -20 }}
-//                       transition={{ delay: index * 0.1 }}
-//                       className={`bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 ${
-//                         isCompleted ? "ring-2 ring-green-400" : ""
-//                       }`}
-//                     >
-//                       <div className="flex items-start justify-between mb-4">
-//                         <div className="flex-1">
-//                           <div className="flex items-center gap-3 mb-2">
-//                             <span
-//                               className={`px-3 py-1 rounded-full text-sm font-medium ${categoryConfig.bg} text-white`}
-//                             >
-//                               {question.category}
-//                             </span>
-//                             <span
-//                               className={`px-3 py-1 rounded-full text-sm font-medium ${diffConfig.color}`}
-//                             >
-//                               {diffConfig.icon} {question.difficulty}
-//                             </span>
-//                             {question.section && (
-//                               <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-600 text-white">
-//                                 {question.section}
-//                               </span>
-//                             )}
-//                           </div>
-//                           <h4 className="text-lg font-semibold mb-2">
-//                             {question.question}
-//                           </h4>
-//                         </div>
-
-//                         <div className="flex items-center gap-3">
-//                           <button
-//                             onClick={() => {
-//                               setProgress((prev) => ({
-//                                 ...prev,
-//                                 [question._id]: {
-//                                   ...prev[question._id],
-//                                   showAnswer: !prev[question._id]?.showAnswer,
-//                                   updatedAt: new Date().toISOString(),
-//                                 },
-//                               }));
-//                             }}
-//                             className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
-//                           >
-//                             {showAnswer ? "Hide Answer" : "Show Answer"}
-//                           </button>
-//                           <button
-//                             onClick={() => {
-//                               setProgress((prev) => ({
-//                                 ...prev,
-//                                 [question._id]: {
-//                                   ...prev[question._id],
-//                                   isCompleted: !prev[question._id]?.isCompleted,
-//                                   completedAt: !prev[question._id]?.isCompleted
-//                                     ? new Date().toISOString()
-//                                     : null,
-//                                   updatedAt: new Date().toISOString(),
-//                                 },
-//                               }));
-//                             }}
-//                             className={`px-4 py-2 rounded-lg transition-colors ${
-//                               isCompleted
-//                                 ? "bg-green-500 hover:bg-green-600"
-//                                 : "bg-gray-600 hover:bg-gray-700"
-//                             }`}
-//                           >
-//                             {isCompleted ? "✓ Completed" : "Mark Complete"}
-//                           </button>
-//                         </div>
-//                       </div>
-
-//                       <AnimatePresence>
-//                         {showAnswer && (
-//                           <motion.div
-//                             initial={{ opacity: 0, height: 0 }}
-//                             animate={{ opacity: 1, height: "auto" }}
-//                             exit={{ opacity: 0, height: 0 }}
-//                             transition={{ duration: 0.3 }}
-//                             className="mt-4 p-4 bg-gray-800/50 rounded-lg border-l-4 border-blue-400"
-//                           >
-//                             <h5 className="font-semibold text-blue-400 mb-2">
-//                               Answer:
-//                             </h5>
-//                             <div className="text-gray-300 whitespace-pre-wrap">
-//                               {question.answer}
-//                             </div>
-//                           </motion.div>
-//                         )}
-//                       </AnimatePresence>
-//                     </motion.div>
-//                   );
-//                 })
-//               : !isQuestionsLoading && (
-//                   <div className="text-center py-12">
-//                     <div className="text-6xl mb-4">🔍</div>
-//                     <h3 className="text-xl font-semibold mb-2">
-//                       No questions found
-//                     </h3>
-//                     <p className="text-gray-400">
-//                       Try adjusting your filters or search term
-//                     </p>
-//                   </div>
-//                 )}
-//           </AnimatePresence>
-
-//           {hasMore && !isQuestionsLoading && (
-//             <div className="text-center py-4">
-//               <p className="text-gray-300">Scroll to load more...</p>
-//             </div>
-//           )}
-//         </div>
-//       </div>
-
-//       <Footer />
-//     </div>
-//   );
-// }
-
+// src/app/dashboard/page.js
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { PieChart } from "react-minimal-pie-chart";
 import { useSession } from "next-auth/react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { useProgress } from "../hooks/useProgress";
+
+// Custom Modal Component
+const Modal = ({ isOpen, onClose, children }) => (
+  <AnimatePresence>
+    {isOpen && (
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        />
+        <motion.div
+          className="relative z-10 w-full max-w-md"
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
+// Enhanced Reset Confirmation Modal
+const ResetConfirmationModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  isResetting,
+}) => (
+  <Modal isOpen={isOpen} onClose={onClose}>
+    <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 border border-gray-600/50 shadow-2xl">
+      <div className="text-center mb-6">
+        <div className="w-16 h-16 mx-auto mb-4 bg-red-500/20 rounded-full flex items-center justify-center">
+          <svg
+            className="w-8 h-8 text-red-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+            />
+          </svg>
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">
+          Reset All Progress
+        </h3>
+        <p className="text-gray-300 leading-relaxed">
+          This action will permanently delete all your progress across all
+          categories. You'll lose all completed questions and statistics.
+        </p>
+      </div>
+
+      <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-red-500/30 flex items-center justify-center mt-0.5">
+            <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+          </div>
+          <div className="text-sm text-red-200">
+            <strong>Warning:</strong> This action cannot be undone. All your
+            learning progress will be lost forever.
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          onClick={onClose}
+          disabled={isResetting}
+          className="flex-1 px-4 py-3 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={isResetting}
+          className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 disabled:from-red-700 disabled:to-red-800 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg flex items-center justify-center gap-2"
+        >
+          {isResetting ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              Resetting...
+            </>
+          ) : (
+            "Yes, Reset All"
+          )}
+        </button>
+      </div>
+    </div>
+  </Modal>
+);
 
 export default function DashboardPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const {
+    progress,
+    isLoading: progressLoading,
+    isSaving,
+    error: progressError,
+    getStats,
+    getCategoryStats,
+  } = useProgress();
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [progress, setProgress] = useState({});
-  const [userStats, setUserStats] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [categoryStats, setCategoryStats] = useState([]);
+  const [userStats, setUserStats] = useState({
+    totalQuestions: 0,
+    completedQuestions: 0,
+    completionPercentage: 0,
+  });
   const [retryCount, setRetryCount] = useState(0);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const maxRetries = 3;
 
-  // Redirect unauthenticated users
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
     }
   }, [status, router]);
 
-  // Fetch progress data with retry logic
   const fetchData = async () => {
     if (status !== "authenticated" || retryCount >= maxRetries) return;
 
@@ -790,27 +153,25 @@ export default function DashboardPage() {
     setError(null);
 
     try {
-      console.log("Fetching dashboard progress, retry:", retryCount);
       const res = await fetch("/api/dashboard/data", {
         headers: {
           Authorization: `Bearer ${session?.accessToken || ""}`,
         },
       });
 
-      console.log("Response status:", res.status);
       if (!res.ok) {
         throw new Error(
-          `Failed to fetch progress: ${res.status} ${res.statusText}`
+          `Failed to fetch data: ${res.status} ${res.statusText}`
         );
       }
 
       const {
-        initialProgress,
-        userStats,
         categories: fetchedCategories,
+        categoryStats,
+        userStats,
       } = await res.json();
-
-      setProgress(initialProgress || {});
+      setCategories(fetchedCategories || []);
+      setCategoryStats(categoryStats || []);
       setUserStats(
         userStats || {
           totalQuestions: 0,
@@ -818,13 +179,11 @@ export default function DashboardPage() {
           completionPercentage: 0,
         }
       );
-      setCategories(fetchedCategories || []);
     } catch (error) {
-      console.error("Fetch error:", error);
       setError(
         retryCount + 1 >= maxRetries
           ? "Maximum retries reached. Please check your connection or contact support."
-          : `Failed to load progress: ${error.message}. Retrying... (${
+          : `Failed to load data: ${error.message}. Retrying... (${
               retryCount + 1
             }/${maxRetries})`
       );
@@ -840,53 +199,9 @@ export default function DashboardPage() {
     fetchData();
   }, [session, status, retryCount]);
 
-  // Debounced progress saving
-  const saveProgressToServer = async (progressData) => {
-    if (!session?.user?.id || Object.keys(progressData).length === 0) return;
-
-    setIsSaving(true);
-    try {
-      console.log("Saving progress for user:", session?.user?.id);
-      const response = await fetch("/api/save-progress", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.accessToken || ""}`,
-        },
-        body: JSON.stringify({ progress: progressData }),
-      });
-
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || "Failed to save progress");
-      }
-
-      if (result.stats) {
-        setUserStats((prev) => ({ ...prev, ...result.stats }));
-      }
-    } catch (error) {
-      console.error("Save progress error:", error);
-      setError("Failed to save progress");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => saveProgressToServer(progress), 1000);
-    return () => clearTimeout(timeoutId);
-  }, [progress, session]);
-
   const resetProgress = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to reset all progress? This cannot be undone."
-      )
-    )
-      return;
-
+    setIsResetting(true);
     try {
-      console.log("Resetting progress for user:", session?.user?.id);
       const response = await fetch("/api/reset-progress", {
         method: "POST",
         headers: { Authorization: `Bearer ${session?.accessToken || ""}` },
@@ -894,18 +209,15 @@ export default function DashboardPage() {
 
       const result = await response.json();
       if (result.success) {
-        setProgress({});
-        setUserStats({
-          totalQuestions: 0,
-          completedQuestions: 0,
-          completionPercentage: 0,
-        });
+        setShowResetModal(false);
+        await fetchData();
       } else {
-        throw new Error(result.error || "Failed to reset progress");
+        throw new Error(result.message || "Failed to reset progress");
       }
     } catch (error) {
-      console.error("Reset progress error:", error);
       setError("Failed to reset progress");
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -914,52 +226,42 @@ export default function DashboardPage() {
       "Basic JavaScript": {
         gradient: "from-blue-600 to-cyan-600",
         bg: "bg-gradient-to-r from-blue-600 to-cyan-600",
+        shadow: "shadow-blue-500/25",
+        border: "border-blue-500/30",
+        icon: "💎",
       },
       "Advanced JavaScript": {
         gradient: "from-purple-600 to-pink-600",
         bg: "bg-gradient-to-r from-purple-600 to-pink-600",
+        shadow: "shadow-purple-500/25",
+        border: "border-purple-500/30",
+        icon: "⚡",
       },
       "React JS": {
         gradient: "from-emerald-600 to-teal-600",
         bg: "bg-gradient-to-r from-emerald-600 to-teal-600",
+        shadow: "shadow-emerald-500/25",
+        border: "border-emerald-500/30",
+        icon: "⚛️",
       },
     }[category] || {
       gradient: "from-gray-600 to-gray-700",
       bg: "bg-gradient-to-r from-gray-600 to-gray-700",
+      shadow: "shadow-gray-500/25",
+      border: "border-gray-500/30",
+      icon: "📚",
     });
 
-  const safeProgress = progress || {};
-  const completedCount = useMemo(
-    () =>
-      userStats?.totalQuestions
-        ? Math.round(
-            (userStats.completedQuestions / userStats.totalQuestions) *
-              safeProgress.length || 0
-          )
-        : 0,
-    [userStats, safeProgress]
-  );
-  const totalCount = userStats?.totalQuestions || 0;
-  const progressPercentage = userStats?.completionPercentage || 0;
+  const handleCategoryClick = (category) => {
+    const slug = category.toLowerCase().replace(/\s+/g, "-");
+    router.push(`/${slug}`);
+  };
 
-  const categoryProgress = useMemo(
-    () =>
-      categories.map((category) => {
-        const completed = userStats?.totalQuestions
-          ? Math.round(
-              (userStats.completedQuestions / userStats.totalQuestions) *
-                (safeProgress[category]?.length || 0)
-            )
-          : 0;
-        const total = safeProgress[category]?.length || 0;
-        const percentage =
-          total > 0 ? Math.round((completed / total) * 100) : 0;
-        return { category, completed, total, percentage };
-      }),
-    [categories, userStats, safeProgress]
-  );
+  const completedCount = userStats.completedQuestions;
+  const totalCount = userStats.totalQuestions;
+  const progressPercentage = userStats.completionPercentage;
 
-  if (status === "loading" || isLoading) {
+  if (status === "loading" || isLoading || progressLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-white text-center">
@@ -972,13 +274,18 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 text-white flex flex-col">
-      <Header error={error} isSaving={isSaving} />
-      {error && (
-        <div className="bg-red-500/20 border border-red-500/50 px-4 py-3 mx-4 mt-4 rounded-lg">
+      <Header error={progressError || error} isSaving={isSaving} />
+
+      {(progressError || error) && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-500/20 border border-red-500/50 px-4 py-3 mx-4 mt-4 rounded-lg backdrop-blur-sm"
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-red-400">⚠️</span>
-              <span className="text-red-100">{error}</span>
+              <span className="text-red-100">{progressError || error}</span>
             </div>
             <div className="flex items-center gap-2">
               {retryCount < maxRetries && (
@@ -1000,107 +307,269 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
-      <div className="container mx-auto px-4 my-8 flex-1">
-        {/* Overall Progress */}
+
+      <div className="container mx-auto px-4 py-6 flex-1">
+        {/* Compact Overall Progress Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/20"
+          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/20 shadow-xl"
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-semibold">Overall Progress</h2>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+                <svg
+                  className="w-5 h-5 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                Overall Progress
+              </h2>
+            </div>
             <button
-              onClick={resetProgress}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+              onClick={() => setShowResetModal(true)}
+              className="group px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25 transform hover:scale-105 active:scale-95 flex items-center gap-2 text-sm"
             >
-              Reset Progress
+              <svg
+                className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              Reset
             </button>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-4 mb-4">
-            <motion.div
-              className="bg-gradient-to-r from-green-400 to-blue-500 h-4 rounded-full transition-all duration-500"
-              style={{ width: `${progressPercentage}%` }}
-              initial={{ width: 0 }}
-              animate={{ width: `${progressPercentage}%` }}
-            />
+
+          {/* Compact Progress Bar */}
+          <div className="relative mb-4">
+            <div className="w-full bg-gray-700/50 rounded-full h-4 overflow-hidden backdrop-blur-sm border border-gray-600/30">
+              <motion.div
+                className="bg-gradient-to-r from-green-400 via-blue-500 to-purple-600 h-full rounded-full relative overflow-hidden"
+                style={{ width: `${progressPercentage}%` }}
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPercentage}%` }}
+                transition={{ duration: 1, ease: "easeOut" }}
+              >
+                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+              </motion.div>
+            </div>
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-xs font-semibold text-white drop-shadow-lg">
+              {progressPercentage}%
+            </div>
           </div>
-          <div className="text-center">
-            <span className="text-3xl font-bold">{completedCount}</span>
-            <span className="text-gray-300">
-              {" "}
-              / {totalCount} questions completed
-            </span>
-            <span className="ml-4 text-2xl font-semibold text-green-400">
-              ({progressPercentage}%)
-            </span>
+
+          {/* Compact Stats Display */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl p-4 border border-green-500/30 backdrop-blur-sm text-center">
+              <div className="text-2xl font-bold text-white mb-1">
+                {completedCount}
+              </div>
+              <div className="text-green-200 text-xs">Completed</div>
+            </div>
+
+            <div className="bg-gradient-to-br from-blue-500/20 to-cyan-600/20 rounded-xl p-4 border border-blue-500/30 backdrop-blur-sm text-center">
+              <div className="text-2xl font-bold text-white mb-1">
+                {totalCount}
+              </div>
+              <div className="text-blue-200 text-xs">Total</div>
+            </div>
+
+            <div className="bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl p-4 border border-purple-500/30 backdrop-blur-sm text-center">
+              <div className="text-2xl font-bold text-white mb-1">
+                {progressPercentage}%
+              </div>
+              <div className="text-purple-200 text-xs">Progress</div>
+            </div>
           </div>
-          {userStats?.lastUpdated && (
-            <div className="text-center mt-2 text-sm text-gray-400">
-              Last updated: {new Date(userStats.lastUpdated).toLocaleString()}
+
+          {progress && (
+            <div className="text-center mt-4 text-xs text-gray-400 bg-gray-800/30 rounded-lg p-2 border border-gray-700/30">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                Last updated: {new Date().toLocaleString()}
+              </div>
             </div>
           )}
         </motion.div>
 
-        {/* Category Progress */}
+        {/* Redesigned Category Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/20"
+          transition={{ delay: 0.2 }}
+          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/20 shadow-xl"
         >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-8 h-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <svg
+                className="w-4 h-4 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+              Learning Categories
+            </h2>
+          </div>
+
           {categories.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {categoryProgress.map(
-                ({ category, completed, total, percentage }) => {
-                  const { bg } = getCategoryConfig(category);
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {categoryStats.map(
+                ({ category, completed, total, percentage }, index) => {
+                  const config = getCategoryConfig(category);
                   return (
-                    <div key={category} className="flex flex-col items-center">
-                      <h3
-                        className={`text-lg font-semibold mb-2 ${bg} px-3 py-1 rounded-full text-white`}
-                      >
-                        {category}
-                      </h3>
-                      <div className="w-32 h-32">
-                        <PieChart
-                          data={[
-                            {
-                              title: "Completed",
-                              value: completed,
-                              color: "#34D399",
-                            },
-                            {
-                              title: "Remaining",
-                              value: total - completed,
-                              color: "#4B5563",
-                            },
-                          ]}
-                          lineWidth={20}
-                          label={() => `${percentage}%`}
-                          labelStyle={{
-                            fontSize: "16px",
-                            fill: "#ffffff",
-                            fontWeight: "bold",
-                          }}
-                          labelPosition={0}
-                        />
+                    <motion.div
+                      key={category}
+                      className={`relative bg-gradient-to-br from-white/5 to-white/10 rounded-xl p-5 border ${config.border} backdrop-blur-sm hover:from-white/10 hover:to-white/15 transition-all duration-300 hover:shadow-xl ${config.shadow} hover:scale-105 active:scale-95`}
+                      whileHover={{ y: -3 }}
+                      whileTap={{ scale: 0.98 }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 * index }}
+                    >
+                      {/* Card Header with Icon and Title */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl group-hover:scale-110 transition-transform duration-300">
+                            {config.icon}
+                          </span>
+                          <div>
+                            <h3 className="font-bold text-white text-sm leading-tight">
+                              {category}
+                            </h3>
+                            <div className="text-xs text-gray-400">
+                              {completed}/{total} completed
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Small Circular Progress */}
+                        <div className="w-12 h-12 flex-shrink-0">
+                          <PieChart
+                            data={[
+                              {
+                                title: "Completed",
+                                value: completed,
+                                color: "#34D399",
+                              },
+                              {
+                                title: "Remaining",
+                                value: total - completed,
+                                color: "#374151",
+                              },
+                            ]}
+                            lineWidth={25}
+                            label={() => `${percentage}%`}
+                            labelStyle={{
+                              fontSize: "25px",
+                              fill: "#ffffff",
+                              fontWeight: "bold",
+                            }}
+                            labelPosition={0}
+                          />
+                        </div>
                       </div>
-                      <p className="mt-2 text-gray-300">
-                        {completed} / {total} questions ({percentage}%)
-                      </p>
-                    </div>
+
+                      {/* Progress Bar */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-300">Progress</span>
+                          <span className="text-green-400 font-semibold">
+                            {percentage}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-700/50 rounded-full h-2">
+                          <motion.div
+                            className="bg-gradient-to-r from-green-400 to-emerald-500 h-2 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${percentage}%` }}
+                            transition={{ duration: 1, delay: 0.2 * index }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Start Learning Button */}
+                      <div className="mt-4">
+                        <button
+                          onClick={() => handleCategoryClick(category)}
+                          className={`${config.bg} rounded-lg py-2 px-3 text-center text-xs font-medium text-white shadow-lg cursor-pointer`}
+                        >
+                          {completed === total ? "Review" : "Continue Learning"}{" "}
+                          →
+                        </button>
+                      </div>
+
+                      {/* Hover Effect Overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/0 to-white/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                    </motion.div>
                   );
                 }
               )}
             </div>
           ) : (
-            <div className="text-center py-4">
-              <p className="text-gray-300">No categories available.</p>
+            <div className="text-center py-8">
+              <div className="w-12 h-12 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <svg
+                  className="w-6 h-6 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                  />
+                </svg>
+              </div>
+              <p className="text-lg text-gray-300 mb-1">
+                No categories available
+              </p>
+              <p className="text-gray-400 text-sm">
+                Check back later for new learning content
+              </p>
             </div>
           )}
         </motion.div>
       </div>
+
       <Footer />
+
+      {/* Enhanced Reset Confirmation Modal */}
+      <ResetConfirmationModal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onConfirm={resetProgress}
+        isResetting={isResetting}
+      />
     </div>
   );
 }
